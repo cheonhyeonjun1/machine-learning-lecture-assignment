@@ -1,0 +1,160 @@
+<BGD>
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+dataset=pd.read_csv("advertising.csv")
+dataset.head()
+X1=dataset.iloc[:,:1].values
+X2=dataset.iloc[:,1:2].values
+X3=dataset.iloc[:,2:3].values
+y=dataset.iloc[:,-1].values
+
+w =np.random.uniform(low=-1.0, high=1.0)
+b =np.random.uniform(low=-1.0, high=1.0)
+
+y_hat = w * X1+ b
+error = ((y_hat - y) ** 2)/2
+
+
+num_iter = 100
+learning_rate = 0.00001
+errors = []
+
+for iteration in range(num_iter):
+    y_hat = w*X1 + b
+
+    error = (((y_hat - y)**2)/2).mean()
+    if error < 0.0005:
+        break
+    
+    w = w - learning_rate * ((y_hat - y) * X1).mean()
+    b = b - learning_rate * (y_hat - y).mean()
+    
+    errors.append(error)
+
+plt.figure(figsize=(8,6))
+plt.plot([min(X1),max(X1)],[min(y_hat),max(y_hat)],"red")
+plt.scatter(X1,y)
+plt.xlabel('TV')
+plt.ylabel('sales')
+
+<sSGD>
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# 데이터 로드
+dataset = pd.read_csv("advertising.csv")
+
+# Feature (X1: TV)와 Target (y: sales) 분리
+x1 = dataset.iloc[:, 0:1].values.flatten()  # (n,1) → (n,)  # 자동으로 broadcast 되는 문제와 randome 샘플링시 1차원 배열로 남는 문제 해결
+y = dataset.iloc[:, -1].values.flatten()  # (n,1) → (n,)
+
+# 파라미터 초기화
+num_iter = 1000
+learning_rate = 0.00001
+w = np.random.uniform(low=-1.0, high=1.0)  # 가중치 (X1 하나만 사용)
+b = np.random.uniform(low=-1.0, high=1.0)  # 바이어스
+errors = []
+
+# SGD 반복 수행
+for iteration in range(num_iter):
+    idx = np.random.randint(0, len(x1)) 
+    
+     # random.chioce는 배열을 복사 방식(자원 소모) (2,1)인 상태에선 오류 발생
+     # but random.randint는  인덱스를 가져오는 방식이여서 속도가 빠름. but list가 아닌 numpy 배열이어야함
+     
+    x1_sgd = x1[idx]  # 해당 샘플의 X1 (TV 광고비)
+
+    y_sgd = y[idx]  # 해당 샘플의 y (판매량)
+
+    # 예측값 계산
+    predict_sgd = w * x1_sgd + b
+
+    # 경사 하강법 업데이트 (SGD)
+    gradient_w = (predict_sgd - y_sgd) * x1_sgd
+    gradient_b = (predict_sgd - y_sgd)
+
+    w -= learning_rate * gradient_w
+    b -= learning_rate * gradient_b
+
+    # 전체 데이터에 대한 예측값 및 손실 계산
+    y_hat = w * x1 + b
+    error = ((y - y_hat) ** 2).mean()
+    errors.append(error)
+
+# 최종 모델의 회귀선 그래프
+plt.figure(figsize=(8, 6))
+plt.scatter(x1, y, label="Actual Data")  # 실제 데이터
+plt.plot(x1, y_hat, color="red", label="Regression Line")  # 학습된 회귀선
+plt.xlabel('TV Advertising Budget')
+plt.ylabel('Sales')
+plt.legend()
+plt.title('Linear Regression using SGD')
+plt.show()
+
+# 손실 그래프 (학습 과정)
+plt.figure(figsize=(10, 7))
+plt.plot(errors, label="MSE Loss")
+plt.xlabel('Iteration')
+plt.ylabel('Mean Squared Error')
+plt.title('SGD Error Convergence')
+plt.legend()
+plt.show()
+
+<loss surface>
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+# 데이터 로드
+dataset = pd.read_csv("advertising.csv")
+
+# Feature & Target 분리
+X2 = dataset.iloc[:, 1:2].values.flatten()  # Radio 광고비
+X3 = dataset.iloc[:, 2:3].values.flatten()  # Newspaper 광고비
+y = dataset.iloc[:, -1].values.flatten()    # Sales
+
+# w2, w3 범위 설정 및 2D 그리드 생성
+w2 = np.linspace(-5, 5, 100)
+w3 = np.linspace(-5, 5, 100)
+W2, W3 = np.meshgrid(w2, w3)  # 2D 그리드 생성
+
+
+EX) W2:
+[[-5  0  5]
+ [-5  0  5]
+ [-5  0  5]]
+
+W3:
+[[-5 -5 -5]
+ [ 0  0  0]
+ [ 5  5  5]]
+
+ 
+# 오류 저장할 배열 (W2와 같은 크기)
+errors = np.zeros_like(W2)
+
+# Loss 계산
+for i in range(W2.shape[0]):   # w2 방향 (100개) W2가 행방향으로 복사되었기 때문
+    for j in range(W2.shape[1]):  # w3 방향 (100개)  W3가 열방향으로 복사가 되었기 때문
+        y_hat = W2[i, j] * X2 + W3[i, j] * X3  # 예측값
+        errors[i, j] = (((y_hat - y) ** 2) / 2).mean()  # MSE Loss 계산
+
+
+
+# 3D Loss Surface 시각화
+fig = plt.figure(figsize=(10, 7))
+ax = fig.add_subplot(111, projection='3d')
+ax.plot_surface(W2, W3, errors, cmap='viridis', edgecolor='none')
+
+# 축 설정
+ax.set_xlabel('w2 (Radio)')
+ax.set_ylabel('w3 (Newspaper)')
+ax.set_zlabel('Loss')
+ax.set_title('Loss Surface')
+
+plt.show()
