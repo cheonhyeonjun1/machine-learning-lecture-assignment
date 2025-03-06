@@ -1,0 +1,148 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+with open('./iris.csv', 'r') as f:
+    df = pd.read_csv(f)
+
+df=df[df['variety'].isin(['Versicolor', 'Virginica'])]
+df['variety'] = df['variety'].map({'Versicolor': 0, 'Virginica': 1})
+X = np.array([df['sepal.length'], df['sepal.width'], df['petal.length'], df['petal.width']])# (4,n)
+
+#X1 = np.array([1, 2, 3, 4])  # (4,) X2 = np.array([5, 6, 7, 8])  # (4,)
+#X = np.array([X1, X2])
+#print(X.shape)  # (2, 4)
+
+#X1 = np.array([1, 2, 3, 4])  (4,) #X2 = np.array([5, 6, 7, 8])  # (4,)
+#X = np.c_[X1, X2]  # 열 방향으로 쌓기
+#print(X.shape)  # (4,2)
+
+y=df['variety'].values  #(n,)
+config_layer=[4,3,2,1]
+
+class NeuralNet:
+    def __init__(self, config_layer,X):
+        self.w1 = (np.random.rand(config_layer[0], X.shape[0]) - 0.5) * 0.1  #더 좋은 학습을 위해 w는 0과 가까운 ,b는 0으로 설정
+        self.b1 = np.zeros((config_layer[0], 1))  
+        self.w2 = (np.random.rand(config_layer[1], config_layer[0]) - 0.5) * 0.1  
+        self.b2 = np.zeros((config_layer[1], 1))
+        self.w3 = (np.random.rand(config_layer[2], config_layer[1]) - 0.5) * 0.1
+        self.b3 = np.zeros((config_layer[2], 1))
+        self.b4 = np.zeros((config_layer[3], 1))
+        self.w4 = (np.random.rand(config_layer[3], config_layer[2]) - 0.5) * 0.1
+
+    def sigmoid(self, X):
+        return 1 / (1 + np.exp(-X))
+
+    
+    def sigmoid_derivative(self, X):
+        return X * (1 - X)
+
+    def compute_loss(self, y_hat, y):
+        m = len(y)
+        loss = - (1/m) * np.sum(y * np.log(y_hat) + (1 - y) * np.log(1 - y_hat))
+        return loss
+
+    def forward(self, X):
+        self.z1 = self.w1 @ X + self.b1  # TIP np.newaxis는 차원을 맞춰주는 함수
+        self.a1 = self.sigmoid(self.z1)
+
+        self.z2 = self.w2 @ self.a1 + self.b2 
+        self.a2 = self.sigmoid(self.z2)
+
+        self.z3 = self.w3 @ self.a2 + self.b3
+        self.a3 = self.sigmoid(self.z3)
+
+        self.z4 = self.w4 @ self.a3 + self.b4
+        self.a4 = self.sigmoid(self.z4)
+        return self.a4
+
+    def update(self, X, y, lr):
+        m = len(y)
+
+        # 출력층의 기울기
+        dZ4 =  self.a4-y #j(w)/a4 * a4/z4 각각 미분 해서 곱한 결과
+        dW4 = (1/m) * (dZ4 @ self.a3.T) #dw(l)=Z(L)@aT(L-1)/n,bath gradient discent방식
+        db4 = (1/m) * np.sum(dZ4, axis=1, keepdims=True)  #dw(l)=sum(Z(L))/n
+
+        # 3번째 은닉층의 기울기
+        dZ3 = self.w4.T @ dZ4 * self.sigmoid_derivative(self.a3) #z(l)=z(l+1)*w(l+1)*a(l)(1-a(l)) => w(l+1)@z(l+1)*a(l)(1-a(l))
+        dW3 = (1/m) * (dZ3 @ self.a2.T)
+        db3 = (1/m) * np.sum(dZ3, axis=1, keepdims=True)
+
+        # 2번째 은닉층의 기울기
+        dZ2 = self.w3.T @ dZ3 * self.sigmoid_derivative(self.a2)
+        dW2 = (1/m) * (dZ2 @ self.a1.T)
+        db2 = (1/m) * np.sum(dZ2, axis=1, keepdims=True)
+
+        # 1번째 은닉층의 기울기
+        dZ1 = self.w2.T @ dZ2 * self.sigmoid_derivative(self.a1)
+        dW1 = (1/m) * (dZ1 @ X.T) 
+        db1 = (1/m) * np.sum(dZ1, axis=1, keepdims=True)
+
+        
+        self.w4 -= lr * dW4
+        self.b4 -= lr * db4
+        self.w3 -= lr * dW3
+        self.b3 -= lr * db3
+        self.w2 -= lr * dW2
+        self.b2 -= lr * db2
+        self.w1 -= lr * dW1
+        self.b1 -= lr * db1
+        
+epochs = 1000
+lr = 0.01
+
+# 신경망 객체 생성
+nn = NeuralNet(config_layer,X)
+
+
+losses = []
+
+for epoch in range(epochs):
+    
+    y_hat = nn.forward(X)
+    
+    loss = nn.compute_loss(y_hat, y)
+    losses.append(loss)
+    nn.update(X, y, lr)  
+    if epoch % 100 == 0:
+        print(f'Epoch {epoch} Loss: {loss}')
+
+plt.plot(losses)
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.title('Loss')
+plt.show()
+
+
+a3_values = nn.a3.T  #(N,2)
+
+
+a3_min = a3_values.min(axis=0)
+a3_max = a3_values.max(axis=0)
+
+a3_normalized = (a3_values - a3_min) / (a3_max - a3_min) # 정규화 (N,2)- (1,2) 브로드캐스트
+
+x_normalized = a3_normalized[:, 0]  #(N,)
+y_normalized = a3_normalized[:, 1]  #(N,)
+
+xx, yy = np.meshgrid(np.linspace(x_normalized.min() - 0.1, x_normalized.max() + 0.1, 100),np.linspace(y_normalized.min() - 0.1, y_normalized.max() + 0.1, 100))
+#(N,N)
+grid_a3 = np.array([xx.ravel(), yy.ravel()])  # ravel은 (n,n)을 (n2,)으로 펼침  즉 (2,n2)
+z4 = (nn.w4 @ grid_a3 + nn.b4).reshape(xx.shape)  # (1,2) (2,N2) -> (1,N2)  XX에 맞게 (N,N)
+z4_class = (z4 > 0).astype(int)  # z4 > 0이면 1, 아니면 0
+
+# 결정 경계 시각화
+plt.contourf(xx, yy, z4_class, alpha=0.3, cmap='coolwarm')
+
+# 데이터 포인트 표시 (정답 라벨에 따라 색상 설정)
+scatter = plt.scatter(x_normalized, y_normalized, c=y, cmap='viridis', marker='o')
+
+
+handles, labels = scatter.legend_elements()
+plt.legend(handles, ['Versicolor', 'Virginica'], loc='upper right') #순서 0,1
+plt.xlabel('Normalized A3 Component 1')
+plt.ylabel('Normalized A3 Component 2')
+plt.title('Normalized A3 Values with Decision Boundary')
+plt.show()
