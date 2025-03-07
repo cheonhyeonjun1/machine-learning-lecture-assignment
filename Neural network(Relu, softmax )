@@ -1,0 +1,125 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+with open('./iris.csv', 'r') as f:
+    df = pd.read_csv(f)
+
+df['variety'] = df['variety'].map({'Setosa': 0, 'Versicolor': 1, 'Virginica': 2})
+X = np.array([df['sepal.length'], df['sepal.width'], df['petal.length'], df['petal.width']])#4byn
+y=df['variety'].values
+
+num_classes = len(np.unique(y))
+y_one_hot = np.zeros((num_classes, len(y))) # 3 x n 크기의 행렬 생성
+
+for i, label in enumerate(y):
+    y_one_hot[label, i] = 1.0
+
+config_layer=[10,9,8,7,3]
+
+class NeuralNet:
+    def __init__(self, config_layer):
+        self.w1 = (np.random.rand(config_layer[0], 4) - 0.5) * 0.1  #더 좋은 학습을 위해 w는 0과 가까운 ,b는 0으로 설정
+        self.b1 = np.zeros((config_layer[0], 1))  
+        self.w2 = (np.random.rand(config_layer[1], config_layer[0]) - 0.5) * 0.1  
+        self.b2 = np.zeros((config_layer[1], 1))
+        self.w3 = (np.random.rand(config_layer[2], config_layer[1]) - 0.5) * 0.1
+        self.b3 = np.zeros((config_layer[2], 1))
+        self.b4 = np.zeros((config_layer[3], 1))
+        self.w4 = (np.random.rand(config_layer[3], config_layer[2]) - 0.5) * 0.1
+        self.b5 = np.zeros((config_layer[4], 1))
+        self.w5 = (np.random.rand(config_layer[4], config_layer[3]) - 0.5) * 0.1
+
+    def relu(self, X):
+        return np.maximum(0, X)
+    
+    def relu_derivative(self, X):
+        return (X > 0).astype(float)
+
+
+    def softmax(self, X):
+        exp_X = np.exp(X - np.max(X, axis=0, keepdims=True))   #3byn의 x , z5가 3byn  np.max로빼는 이유는 exp x가 커지는 현상(overflow)막기 위함
+        return exp_X / np.sum(exp_X, axis=0, keepdims=True)
+
+        
+    def compute_loss(self, y_hat, y):
+        
+        m = y.shape[1]  # y가 원핫 인코더 되어 (3,N)이니 y.shpae[1]은 N을 가져옴
+        loss = -np.sum(y * np.log(y_hat + 1e-8)) / m  # log(y_hat)이 0이되는 것을 정의하지 않았으니 아주 작은 값을 더해 안정성을 확보함,크로스 엔트로피 정의임
+        return loss
+
+    def forward(self, X):
+        self.z1 = self.w1 @ X + self.b1  # TIP np.newaxis는 차원을 맞춰주는 함수
+        self.a1 = self.relu(self.z1)
+
+        self.z2 = self.w2 @ self.a1 + self.b2 
+        self.a2 = self.relu(self.z2)
+
+        self.z3 = self.w3 @ self.a2 + self.b3
+        self.a3 = self.relu(self.z3)
+
+        self.z4 = self.w4 @ self.a3 + self.b4
+        self.a4 = self.relu(self.z4)
+
+        self.z5 = self.w5 @ self.a4 + self.b5  #중간층은 relu 마지막은 soft max로 출력
+        self.a5 = self.softmax(self.z5)
+        return self.a5
+
+    def update(self,lr,y,X):
+        m = X.shape[1]
+
+        dZ5 = self.a5 - y           #cross entropy미분결과 a-y, sigmoid와 동일한 결과
+        dW5 = (1/m) * (dZ5 @ self.a4.T)
+        db5 = (1/m) * np.sum(dZ5, axis=1, keepdims=True)
+
+        dZ4 = self.w5.T @ dZ5 * self.relu_derivative(self.a4) #z(l)=z(l+1)*w(l+1)*.relu_derivative(a(l))
+        dW4 = (1/m) * (dZ4 @ self.a3.T)                    #dw(l)=Z(L)@aT(L-1)/n,bath gradient discent방식
+        db4 = (1/m) * np.sum(dZ4, axis=1, keepdims=True)  #db(l)=sum(Z(L))/n
+
+        dZ3 = self.w4.T @ dZ4 * self.relu_derivative(self.a3)
+        dW3 = (1/m) * (dZ3 @ self.a2.T)
+        db3 = (1/m) * np.sum(dZ3, axis=1, keepdims=True)
+
+        dZ2 = self.w3.T @ dZ3 * self.relu_derivative(self.a2)
+        dW2 = (1/m) * (dZ2 @ self.a1.T)
+        db2 = (1/m) * np.sum(dZ2, axis=1, keepdims=True)
+
+        dZ1 = self.w2.T @ dZ2 * self.relu_derivative(self.a1)
+        dW1 = (1/m) * (dZ1 @ X.T)
+        db1 = (1/m) * np.sum(dZ1, axis=1, keepdims=True)
+
+        self.w5 -= lr * dW5
+        self.b5 -= lr * db5
+        self.w4 -= lr * dW4
+        self.b4 -= lr * db4
+        self.w3 -= lr * dW3
+        self.b3 -= lr * db3
+        self.w2 -= lr * dW2
+        self.b2 -= lr * db2
+        self.w1 -= lr * dW1
+        self.b1 -= lr * db1
+
+# 학습
+config_layer = [32,24,16, 10, 3]  #출력층이 softamx를 이용하는데 이때 class의 개수와 노드의 개수가 일치해야해서 3개로 놓았다. ,relu는 0이되는게 있으니 많은 노드로..
+nn = NeuralNet(config_layer)
+
+epochs = 20000
+lr = 0.1
+
+
+losses = []
+
+for epoch in range(epochs):
+    y_hat = nn.forward(X)
+    loss = nn.compute_loss(y_hat, y_one_hot)
+    losses.append(loss)
+    nn.update(lr, y_one_hot, X)
+
+    if epoch % 1000 == 0:
+        print(f"Epoch {epoch}, Loss: {loss}")
+
+plt.plot(range(0, epochs, 500), losses[::500])  
+plt.xlabel('Epochs (x500)')
+plt.ylabel('Loss')
+plt.title('Loss Curve')
+plt.show()
